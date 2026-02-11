@@ -18,23 +18,46 @@ EMAIL_PASS = os.getenv("EMAIL_PASS")
 
 def get_status(receipt):
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"]
+        )
 
-        page.goto("https://egov.uscis.gov/casestatus/landing.do")
-        page.wait_for_timeout(8000)
+        context = browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
+        )
 
-        page.fill("#receipt_number", receipt)
+        page = context.new_page()
+
+        # Go to site
+        page.goto(
+            "https://egov.uscis.gov/casestatus/landing.do",
+            timeout=60000
+        )
+
+        # Wait for Cloudflare / page load
+        page.wait_for_timeout(15000)
+
+        # Wait until input appears
+        page.wait_for_selector("input[name='receipt_number']", timeout=60000)
+
+        # Fill receipt
+        page.fill("input[name='receipt_number']", receipt)
+
+        # Click submit
         page.click("button[type='submit']")
 
-        page.wait_for_timeout(8000)
+        # Wait for result
+        page.wait_for_timeout(10000)
 
-        status = page.locator("h1").inner_text()
-        details = page.locator("p").inner_text()
+        # Get status
+        status = page.locator("h1").first.inner_text()
+        details = page.locator("p").first.inner_text()
 
         browser.close()
 
         return status, details
+
 
 
 def send_email(report):
